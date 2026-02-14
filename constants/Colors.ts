@@ -1,5 +1,5 @@
 const tintColorLight = '#4F46E5'; // Indigo 600
-const tintColorDark = '#818CF8'; // Indigo 400
+const tintColorDark = '#7aa2f7'; // Tokyo Night Blue
 
 // Common semantic colors
 const common = {
@@ -23,15 +23,18 @@ export const Colors = {
         ...common,
     },
     dark: {
-        text: '#F3F4F6', // Gray 100
-        background: '#111827', // Gray 900
+        text: '#c0caf5', // Tokyo Night Foreground
+        background: '#1a1b26', // Tokyo Night Background
         tint: tintColorDark,
-        icon: '#9CA3AF', // Gray 400
-        tabIconDefault: '#6B7280',
+        icon: '#787c99', // Tokyo Night Comments/Dark Text
+        tabIconDefault: '#565f89',
         tabIconSelected: tintColorDark,
-        cardBackground: '#1F2937', // Gray 800
-        inputBackground: '#374151', // Gray 700
-        borderColor: '#374151', // Gray 700
-        ...common,
+        cardBackground: '#24283b', // Tokyo Night Dark (Lighter than bg)
+        inputBackground: '#1f2335', // Tokyo Night Black/Input
+        borderColor: '#414868', // Tokyo Night Terminal Black
+        success: '#9ece6a', // Tokyo Night Green
+        danger: '#f7768e', // Tokyo Night Red
+        warning: '#e0af68', // Tokyo Night Orange
+        info: '#7dcfff', // Tokyo Night Cyan
     },
 };

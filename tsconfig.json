@@ -6,6 +6,8 @@
       "@/*": [
         "./*"
       ]
-    }
+    },
+    "skipLibCheck": true,
+    "useDefineForClassFields": false
   }
 }

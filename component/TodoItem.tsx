@@ -1,28 +1,33 @@
 
 import React, { useState } from 'react';
-import { StyleSheet, TouchableOpacity, View, TextInput, Modal, Button, Text, TouchableWithoutFeedback, Keyboard, KeyboardAvoidingView, Platform } from 'react-native';
+import { StyleSheet, TouchableOpacity, View, TextInput, Modal, Text, TouchableWithoutFeedback, Keyboard, KeyboardAvoidingView, Platform } from 'react-native';
+import { GlobalStyles } from '@/constants/Styles';
 import { ThemedText } from './ThemedText';
 import { ThemedView } from './ThemedView';
 import { useTheme } from '@/context/ThemeContext';
 import Checkbox from 'expo-checkbox';
 import { Colors } from '@/constants/Colors';
 
+type item = {
+    key: string;
+    label: string;
+    selave: number;
+    selavanathu: number;
+    completed: boolean;
+    order: number;
+}
+
 interface TodoItemProps {
-    item: {
-        key: string;
-        label: string;
-        selave: number;
-        selavanathu: number;
-        completed: boolean;
-    };
+    item: item;
     drag: () => void;
     isActive: boolean;
     onToggle: (key: string) => void;
-    onUpdate: (key: string, field: 'selave' | 'selavanathu', value: number) => void;
+    onUpdate: (key: string, field: 'selave' | 'selavanathu' | 'ethuku', value: number) => void;
     onDelete: (key: string) => void;
+    onViewHistory: (item: item) => void;
 }
 
-export function TodoItem({ item, drag, isActive, onToggle, onUpdate, onDelete }: TodoItemProps) {
+const TodoItemComponent = ({ item, drag, isActive, onToggle, onUpdate, onDelete, onViewHistory }: TodoItemProps) => {
     const { theme } = useTheme();
     const [modalVisible, setModalVisible] = useState(false);
     const [editingField, setEditingField] = useState<'selave' | 'selavanathu' | null>(null);
@@ -48,55 +53,72 @@ export function TodoItem({ item, drag, isActive, onToggle, onUpdate, onDelete }:
     };
 
     return (
-        <TouchableOpacity onLongPress={drag} disabled={isActive} style={[styles.container, isActive && { backgroundColor: Colors[theme].inputBackground }, { borderBottomColor: Colors[theme].borderColor }]}>
-            <ThemedView style={styles.itemContent}>
-                <Checkbox value={item.completed} onValueChange={() => onToggle(item.key)} color={item.completed ? Colors[theme].tint : undefined} style={styles.checkbox} />
-                <View style={styles.textContainer}>
-                    <ThemedText style={[styles.text, item.completed && styles.completedText]} numberOfLines={1}>{item.label}</ThemedText>
+        <TouchableOpacity
+            onPress={() => onViewHistory(item)}
+            onLongPress={drag}
+            disabled={isActive}
+            style={[
+                styles.container,
+                { backgroundColor: Colors[theme].cardBackground },
+                isActive && { opacity: 0.8, transform: [{ scale: 1.02 }] }
+            ]}
+        >
+            <View style={styles.itemContent}>
+                <View style={styles.topRow}>
+                    <Checkbox
+                        value={item.completed}
+                        onValueChange={() => onToggle(item.key)}
+                        color={item.completed ? Colors[theme].tint : Colors[theme].icon}
+                        style={styles.checkbox}
+                    />
+                    <ThemedText style={[styles.title, item.completed && styles.completedText]} numberOfLines={1}>
+                        {item.label}
+                    </ThemedText>
+                    <TouchableOpacity onPress={() => onDelete(item.key)} style={styles.deleteButton}>
+                        <Text style={[styles.deleteButtonText, { color: Colors[theme].danger }]}>✕</Text>
+                    </TouchableOpacity>
+                </View>
 
-                    <View style={styles.statsContainer}>
-                        <TouchableOpacity onPress={() => openEditModal('selave')} style={styles.statItem}>
-                            <ThemedText style={styles.statLabel}>செலவு</ThemedText>
-                            <ThemedText style={styles.statValue}>{item.selave.toLocaleString('en-IN')}</ThemedText>
-                        </TouchableOpacity>
+                <View style={[styles.statsContainer, { backgroundColor: Colors[theme].background }]}>
+                    <TouchableOpacity onPress={() => openEditModal('selave')} style={styles.statItem}>
+                        <ThemedText style={styles.statLabel}>செலவு</ThemedText>
+                        <ThemedText style={styles.statValue}>{item.selave.toLocaleString('en-IN')}</ThemedText>
+                    </TouchableOpacity>
 
-                        <View style={[styles.verticalDivider, { backgroundColor: Colors[theme].borderColor }]} />
+                    <View style={[styles.verticalDivider, { backgroundColor: Colors[theme].borderColor }]} />
 
-                        <TouchableOpacity onPress={() => openEditModal('selavanathu')} style={styles.statItem}>
-                            <ThemedText style={styles.statLabel}>செலவானது</ThemedText>
-                            <ThemedText style={[styles.statValue, { color: Colors[theme].text }]}>{item.selavanathu.toLocaleString('en-IN')}</ThemedText>
-                        </TouchableOpacity>
+                    <TouchableOpacity onPress={() => openEditModal('selavanathu')} style={styles.statItem}>
+                        <ThemedText style={styles.statLabel}>செலவானது</ThemedText>
+                        <ThemedText style={[styles.statValue, { color: Colors[theme].text }]}>{item.selavanathu.toLocaleString('en-IN')}</ThemedText>
+                    </TouchableOpacity>
 
-                        <View style={[styles.verticalDivider, { backgroundColor: Colors[theme].borderColor }]} />
+                    <View style={[styles.verticalDivider, { backgroundColor: Colors[theme].borderColor }]} />
 
-                        <View style={styles.statItem}>
-                            <ThemedText style={styles.statLabel}>மீதி</ThemedText>
-                            <ThemedText style={[
-                                styles.statValue,
-                                { color: (item.selave - item.selavanathu) >= 0 ? Colors[theme].success : Colors[theme].danger }
-                            ]}>
-                                {(item.selave - item.selavanathu).toLocaleString('en-IN')}
-                            </ThemedText>
-                        </View>
+                    <View style={styles.statItem}>
+                        <ThemedText style={styles.statLabel}>மீதி</ThemedText>
+                        <ThemedText style={[
+                            styles.statValue,
+                            { color: (item.selave - item.selavanathu) >= 0 ? Colors[theme].success : Colors[theme].danger }
+                        ]}>
+                            {(item.selave - item.selavanathu).toLocaleString('en-IN')}
+                        </ThemedText>
                     </View>
                 </View>
-                <TouchableOpacity onPress={() => onDelete(item.key)} style={styles.deleteButton}>
-                    <Text style={styles.deleteButtonText}>✕</Text>
-                </TouchableOpacity>
-            </ThemedView>
+            </View>
 
-            <Modal animationType="slide" transparent={true} visible={modalVisible} onRequestClose={() => setModalVisible(false)}>
+            <Modal animationType="fade" transparent={true} visible={modalVisible} onRequestClose={() => setModalVisible(false)}>
                 <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
                     <TouchableWithoutFeedback onPress={() => setModalVisible(false)}>
                         <View style={styles.centeredView}>
                             <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
                                 <View style={[styles.modalView, { backgroundColor: Colors[theme].cardBackground }]} onStartShouldSetResponder={() => true}>
-                                    <ThemedText type='default'>{item.label}</ThemedText>
-                                    <ThemedText style={styles.modalText}>
-                                        {editingField === 'selave' ? 'செலவில்' : 'செலவானதில்'} மாற்றம் செய்
+                                    <ThemedText style={styles.modalHeader}>{item.label}</ThemedText>
+                                    <ThemedText style={styles.modalSubHeader}>
+                                        {editingField === 'selave' ? 'செலவு மாற்றவும்' : 'செலவானதை மாற்றவும்'}
                                     </ThemedText>
+
                                     <TextInput
-                                        style={[styles.modalInput, { color: Colors[theme].text, borderColor: Colors[theme].borderColor }]}
+                                        style={[styles.modalInput, { color: Colors[theme].text, borderColor: Colors[theme].borderColor, backgroundColor: Colors[theme].inputBackground }]}
                                         onChangeText={setTempValue}
                                         value={tempValue}
                                         keyboardType="numeric"
@@ -104,6 +126,7 @@ export function TodoItem({ item, drag, isActive, onToggle, onUpdate, onDelete }:
                                         placeholder="தொகை"
                                         placeholderTextColor={Colors[theme].icon}
                                     />
+
                                     <View style={styles.modalButtons}>
                                         <TouchableOpacity onPress={() => handleUpdate('sub')} style={[styles.actionButton, { backgroundColor: Colors[theme].danger }]}>
                                             <Text style={styles.buttonText}>- குறை</Text>
@@ -112,6 +135,7 @@ export function TodoItem({ item, drag, isActive, onToggle, onUpdate, onDelete }:
                                             <Text style={styles.buttonText}>+ கூட்டு</Text>
                                         </TouchableOpacity>
                                     </View>
+
                                     <TouchableOpacity onPress={() => setModalVisible(false)} style={styles.closeButton}>
                                         <Text style={[styles.closeButtonText, { color: Colors[theme].icon }]}>மூடு</Text>
                                     </TouchableOpacity>
@@ -125,122 +149,129 @@ export function TodoItem({ item, drag, isActive, onToggle, onUpdate, onDelete }:
     );
 }
 
+const arePropsEqual = (prevProps: TodoItemProps, nextProps: TodoItemProps) => {
+    return (
+        prevProps.isActive === nextProps.isActive &&
+        prevProps.item.key === nextProps.item.key &&
+        prevProps.item.label === nextProps.item.label &&
+        prevProps.item.selave === nextProps.item.selave &&
+        prevProps.item.selavanathu === nextProps.item.selavanathu &&
+        prevProps.item.completed === nextProps.item.completed &&
+        prevProps.item.order === nextProps.item.order
+    );
+};
+
+export const TodoItem = React.memo(TodoItemComponent, arePropsEqual);
+
 const styles = StyleSheet.create({
     container: {
-        padding: 16,
-        borderBottomWidth: 1,
+        marginHorizontal: 8,
+        ...GlobalStyles.card,
+        ...GlobalStyles.shadowMedium,
     },
     itemContent: {
+        justifyContent: 'center',
+    },
+    topRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: 'transparent',
+        marginBottom: 12,
     },
-    textContainer: {
+    title: {
+        fontSize: 18,
+        fontWeight: 'bold',
         flex: 1,
+        marginLeft: 12,
+    },
+    completedText: {
+        textDecorationLine: 'line-through',
+        opacity: 0.5,
+    },
+    checkbox: {
+        width: 20,
+        height: 20,
+        borderRadius: 6,
+    },
+    deleteButton: {
+        padding: 8,
+        backgroundColor: 'rgba(255,0,0,0.1)',
+        borderRadius: 8,
+    },
+    deleteButtonText: {
+        fontSize: 14,
+        fontWeight: 'bold',
     },
     statsContainer: {
         flexDirection: 'row',
         alignItems: 'center',
-        marginTop: 8,
         justifyContent: 'space-between',
-        paddingRight: 8,
+        padding: 12,
+        borderRadius: 12,
     },
     statItem: {
         alignItems: 'center',
         flex: 1,
+        paddingVertical: 4,
     },
     statLabel: {
         fontSize: 10,
+        fontWeight: '600',
         opacity: 0.6,
         marginBottom: 2,
+        textTransform: 'uppercase',
+        letterSpacing: 0.5,
     },
     statValue: {
-        fontSize: 14,
-        fontWeight: '600',
+        fontSize: 15,
+        fontWeight: '700',
     },
     verticalDivider: {
         width: 1,
-        height: '80%',
-        marginHorizontal: 4,
+        height: '60%',
+        marginHorizontal: 8,
     },
-    checkbox: {
-        marginRight: 12,
-    },
-    text: {
-        fontSize: 16,
-    },
-    completedText: {
-        textDecorationLine: 'line-through',
-        opacity: 0.6,
-    },
-    centeredView: {
-        flex: 1,
-        justifyContent: "center",
-        alignItems: "center",
-        marginTop: 0,
-        backgroundColor: 'rgba(0,0,0,0.5)'
-    },
+    centeredView: GlobalStyles.modalOverlay,
     modalView: {
-        margin: 20,
-        borderRadius: 20,
-        padding: 35,
-        alignItems: "center",
-        shadowColor: "#000",
-        shadowOffset: {
-            width: 0,
-            height: 2
-        },
-        shadowOpacity: 0.25,
-        shadowRadius: 4,
-        elevation: 5,
-        width: '80%',
+        ...GlobalStyles.modalView,
+        ...GlobalStyles.shadowLarge,
     },
-    modalText: {
-        marginBottom: 15,
-        textAlign: "center",
-        fontSize: 18,
+    modalHeader: {
+        fontSize: 20,
         fontWeight: 'bold',
+        marginBottom: 8,
+        textAlign: 'center',
+    },
+    modalSubHeader: {
+        fontSize: 14,
+        opacity: 0.6,
+        marginBottom: 20,
+        textAlign: 'center',
     },
     modalInput: {
-        height: 40,
-        width: '100%',
-        margin: 12,
-        borderWidth: 1,
-        padding: 10,
-        borderRadius: 5,
+        ...GlobalStyles.input,
+        textAlign: 'center',
+        fontWeight: 'bold',
+        height: 50,
     },
     modalButtons: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         width: '100%',
-        marginTop: 15,
-        gap: 12,
+        marginTop: 20,
+        gap: 16,
     },
     actionButton: {
         flex: 1,
-        padding: 12,
-        borderRadius: 8,
-        alignItems: 'center',
+        ...GlobalStyles.button,
+        elevation: 2,
     },
-    buttonText: {
-        color: '#fff',
-        fontWeight: 'bold',
-        fontSize: 16,
-    },
+    buttonText: GlobalStyles.buttonText,
     closeButton: {
         marginTop: 16,
+        padding: 8,
     },
     closeButtonText: {
         fontSize: 14,
-        textDecorationLine: 'underline',
-    },
-    deleteButton: {
-        padding: 8,
-        marginLeft: 8,
-    },
-    deleteButtonText: {
-        color: '#ff5c5c', // Keep explicit red for delete logic or use Colors[theme].danger if specific
-        fontSize: 18,
-        fontWeight: 'bold',
+        fontWeight: '600',
     },
 });

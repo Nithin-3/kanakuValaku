@@ -1,26 +1,24 @@
 import React, { useState, useCallback, useEffect } from 'react';
-import { StyleSheet, View, TextInput, TouchableOpacity, ActivityIndicator, Alert, KeyboardAvoidingView, Platform, Modal, Text, TouchableWithoutFeedback, Keyboard } from 'react-native';
-import DraggableFlatList, {
-    RenderItemParams,
-    ScaleDecorator,
-    ShadowDecorator,
-    OpacityDecorator
-} from 'react-native-draggable-flatlist';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { StyleSheet, View, TextInput, TouchableOpacity, ActivityIndicator, Alert, KeyboardAvoidingView, Platform, Modal, Text, TouchableWithoutFeedback, Keyboard, LayoutAnimation } from 'react-native';
+import DraggableFlatList, { RenderItemParams, ScaleDecorator, ShadowDecorator, OpacityDecorator } from 'react-native-draggable-flatlist';
 import { TodoItem } from './TodoItem';
 import { useTheme } from '@/context/ThemeContext';
 import { ThemedText } from './ThemedText';
 import { Colors } from '@/constants/Colors';
+import { getKanaku, addKanaku, updateKanaku, deleteKanaku, toggleKanaku, updateOrder, closeRealm } from '@/services/realm';
+import { getItem, setItem } from '@/services/mmkv';
+import { HistoryModal } from './HistoryModal';
 
-type Todo = {
+
+interface Todo {
     key: string;
     label: string;
     selave: number;
     selavanathu: number;
     completed: boolean;
-};
+    order: number;
+}
 
-const STORAGE_KEY = 'kanakuValaku_todos';
 const VARAVU_KEY = 'kanakuValaku_varavu';
 
 export function TodoList() {
@@ -33,91 +31,103 @@ export function TodoList() {
     const [varavu, setVaravu] = useState('0');
     const [addModalVisible, setAddModalVisible] = useState(false);
 
-    // Load todos from storage on mount
+    const [selectedHistoryItem, setSelectedHistoryItem] = useState<{ key: string, label: string } | null>(null);
+    const [historyModalVisible, setHistoryModalVisible] = useState(false);
+
+    // Initial Load
     useEffect(() => {
-        const loadTodos = async () => {
+        let kanakuResults: any = null;
+
+        const loadData = async () => {
             try {
-                const storedTodos = await AsyncStorage.getItem(STORAGE_KEY);
-                if (storedTodos) {
-                    setData(JSON.parse(storedTodos));
-                }
-                const storedVaravu = await AsyncStorage.getItem(VARAVU_KEY);
+                // Load Varavu from MMKV
+                const storedVaravu = getItem(VARAVU_KEY);
                 if (storedVaravu) {
                     setVaravu(storedVaravu);
                 }
+
+                // Initialize Realm listener
+                kanakuResults = await getKanaku();
+
+                const updateState = () => {
+                    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+                    setData(kanakuResults.map((k: any) => ({
+                        key: k.uid,
+                        label: k.ethuku,
+                        selave: k.selavu,
+                        selavanathu: k.selavanathu,
+                        completed: k.completed || false,
+                        order: k.order || 0,
+                    })));
+                    setLoading(false);
+                };
+
+                // Initial fetch
+                updateState();
+
+                // Add listener for live updates
+                kanakuResults.addListener(updateState);
             } catch (error) {
-                console.error('Failed to load todos', error);
-            } finally {
+                console.error('Failed to load data', error);
                 setLoading(false);
             }
         };
-        loadTodos();
+
+        loadData();
+
+        return () => {
+            if (kanakuResults) {
+                kanakuResults.removeAllListeners();
+            }
+            closeRealm();
+        };
     }, []);
 
+    // Save Varavu to MMKV
     useEffect(() => {
-        if (!loading) {
-            const saveTodos = async () => {
-                try {
-                    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-                } catch (error) {
-                    console.error('Failed to save todos', error);
-                }
-            };
-            saveTodos();
-        }
-    }, [data, loading]);
+        const handler = setTimeout(() => {
+            setItem(VARAVU_KEY, varavu);
+        }, 1000); // Debounce save
 
-    useEffect(() => {
-        if (!loading) {
-            const handler = setTimeout(async () => {
-                try {
-                    await AsyncStorage.setItem(VARAVU_KEY, varavu);
-                } catch (error) {
-                    console.error('Failed to save varavu', error);
-                }
-            }, 1000);
-
-            return () => {
-                clearTimeout(handler);
-            };
-        }
-    }, [varavu, loading]);
+        return () => clearTimeout(handler);
+    }, [varavu]);
 
     const toggleTodo = useCallback((key: string) => {
-        setData(prev => {
-            const updatedList = prev.map(item =>
-                item.key === key ? { ...item, completed: !item.completed } : item
-            );
-            return [...updatedList.filter(item => !item.completed), ...updatedList.filter(item => item.completed)];
-        });
+        toggleKanaku(key);
     }, []);
 
-    const updateTodo = useCallback((key: string, field: 'selave' | 'selavanathu', value: number) => {
-        setData(prev => prev.map(item =>
-            item.key === key ? { ...item, [field]: value } : item
-        ));
+    const updateTodo = useCallback((key: string, field: 'selave' | 'selavanathu' | 'ethuku', value: number) => {
+        if (field === 'ethuku') {
+            // @ts-ignore - Handle potential string value for ethuku if needed in future
+            updateKanaku(key, String(value), 'ethuku').catch(e => Alert.alert('Error', e.message));
+        } else if (field === 'selave') {
+            updateKanaku(key, value, 'selavu').catch(e => Alert.alert('Error', e.message));
+        } else {
+            updateKanaku(key, value, 'selavanathu').catch(e => Alert.alert('Error', e.message));
+        }
     }, []);
 
-    const addTodo = () => {
+    const viewHistory = useCallback((item: { key: string, label: string }) => {
+        setSelectedHistoryItem(item);
+        setHistoryModalVisible(true);
+    }, []);
+
+    const addTodo = useCallback(async () => {
         if (text.trim() && selave.trim()) {
-            setData(prev => [
-                ...prev,
-                {
-                    key: Date.now().toString(),
-                    label: text.trim(),
-                    selave: parseInt(selave) || 0,
-                    selavanathu: parseInt(selavanathu) || 0,
-                    completed: false,
-                },
-            ]);
-            setText('');
-            setSelave('');
-            setSelavanathu('');
-            setAddModalVisible(false);
+            try {
+                await addKanaku(text.trim(), parseInt(selave) || 0, parseInt(selavanathu) || 0);
+                LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+                setText('');
+                setSelave('');
+                setSelavanathu('');
+                setAddModalVisible(false);
+            } catch (error) {
+                Alert.alert('Error', 'Failed to add task: ' + (error as Error).message);
+            }
         } else {
             Alert.alert('Error', 'Task name and Selavu are required');
         }
-    };
+    }, [text, selave, selavanathu]);
 
     const deleteTodo = useCallback((key: string) => {
         Alert.alert(
@@ -127,7 +137,8 @@ export function TodoList() {
                 { text: "ரத்து", style: "cancel" },
                 {
                     text: "நீக்கு", style: "destructive", onPress: () => {
-                        setData(prev => prev.filter(item => item.key !== key));
+                        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+                        deleteKanaku(key).catch(e => Alert.alert('Error', e.message));
                     }
                 }
             ]
@@ -139,19 +150,13 @@ export function TodoList() {
             <ScaleDecorator>
                 <OpacityDecorator>
                     <ShadowDecorator>
-                        <TodoItem
-                            item={item}
-                            drag={drag}
-                            isActive={isActive}
-                            onToggle={toggleTodo}
-                            onUpdate={updateTodo}
-                            onDelete={deleteTodo}
-                        />
+                        <TodoItem item={item} drag={drag} isActive={isActive} onToggle={toggleTodo} onUpdate={updateTodo} onDelete={deleteTodo} onViewHistory={viewHistory} />
                     </ShadowDecorator>
                 </OpacityDecorator>
             </ScaleDecorator>
         );
-    }, [toggleTodo, updateTodo, deleteTodo]);
+    }, [toggleTodo, updateTodo, deleteTodo, viewHistory]);
+
 
     if (loading) {
         return (
@@ -164,53 +169,47 @@ export function TodoList() {
 
 
     return (
-        <KeyboardAvoidingView
-            style={[styles.container, { backgroundColor: Colors[theme].background }]}
-            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-            keyboardVerticalOffset={Platform.OS === 'ios' ? 100 : 0}
-        >
+        <KeyboardAvoidingView style={[styles.container, { backgroundColor: Colors[theme].background }]} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={Platform.OS === 'ios' ? 100 : 0}>
             <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
                 <View style={styles.container}>
                     <View style={styles.summaryContainer}>
                         <View style={[styles.summaryCard, styles.fullWidthCard, { backgroundColor: Colors[theme].cardBackground }]}>
                             <ThemedText style={styles.summaryLabel}>வரவு</ThemedText>
                             <View style={styles.amountInputContainer}>
-                                <TextInput
-                                    style={[styles.summaryInput, { color: Colors[theme].text }]}
-                                    value={varavu}
-                                    onChangeText={setVaravu}
-                                    placeholder="0"
-                                    keyboardType="numeric"
-                                    placeholderTextColor={Colors[theme].icon}
-                                />
+                                <TextInput style={[styles.summaryInput, { color: Colors[theme].text }]} value={varavu} onChangeText={setVaravu} placeholder="0" keyboardType="numeric" placeholderTextColor={Colors[theme].icon} />
                             </View>
                         </View>
                         <View style={[styles.summaryCard, styles.halfWidthCard, { backgroundColor: Colors[theme].cardBackground }]}>
                             <ThemedText style={styles.summaryLabel}>செலவு</ThemedText>
-                            <ThemedText style={[styles.summaryValue, { color: Colors[theme].danger }]}>
-                                {data.reduce((acc, item) => acc + (item.selave || 0), 0).toLocaleString('en-IN')}
-                            </ThemedText>
+                            <ThemedText style={[styles.summaryValue, { color: Colors[theme].danger }]}>{data.reduce((acc, item) => acc + (item.selave || 0), 0).toLocaleString('en-IN')}</ThemedText>
                         </View>
                         <View style={[styles.summaryCard, styles.halfWidthCard, { backgroundColor: Colors[theme].cardBackground }]}>
                             <ThemedText style={styles.summaryLabel}>செலவானது</ThemedText>
-                            <ThemedText style={[styles.summaryValue, { color: Colors[theme].danger }]}>
-                                {data.reduce((acc, item) => acc + (item.selavanathu || 0), 0).toLocaleString('en-IN')}
-                            </ThemedText>
+                            <ThemedText style={[styles.summaryValue, { color: Colors[theme].danger }]}>{data.reduce((acc, item) => acc + (item.selavanathu || 0), 0).toLocaleString('en-IN')}</ThemedText>
                         </View>
                         <View style={[styles.summaryCard, styles.halfWidthCard, { backgroundColor: Colors[theme].cardBackground }]}>
                             <ThemedText style={styles.summaryLabel}>சேமிப்பு</ThemedText>
-                            <ThemedText style={[styles.summaryValue, { color: (parseInt(varavu) || 0) - data.reduce((acc, item) => acc + (item.selave || 0), 0) >= 0 ? Colors[theme].success : Colors[theme].danger }]}>
-                                {((parseInt(varavu) || 0) - data.reduce((acc, item) => acc + (item.selave || 0), 0)).toLocaleString('en-IN')}
-                            </ThemedText>
+                            <ThemedText style={[styles.summaryValue, { color: (parseInt(varavu) || 0) - data.reduce((acc, item) => acc + (item.selave || 0), 0) >= 0 ? Colors[theme].success : Colors[theme].danger }]}>{((parseInt(varavu) || 0) - data.reduce((acc, item) => acc + (item.selave || 0), 0)).toLocaleString('en-IN')}</ThemedText>
                         </View>
                         <View style={[styles.summaryCard, styles.halfWidthCard, { backgroundColor: Colors[theme].cardBackground }]}>
                             <ThemedText style={styles.summaryLabel}>இருப்பு</ThemedText>
-                            <ThemedText style={[styles.summaryValue, { color: (parseInt(varavu) || 0) - data.reduce((acc, item) => acc + (item.selavanathu || 0), 0) >= 0 ? Colors[theme].success : Colors[theme].danger }]}>
-                                {((parseInt(varavu) || 0) - data.reduce((acc, item) => acc + (item.selavanathu || 0), 0)).toLocaleString('en-IN')}
-                            </ThemedText>
+                            <ThemedText style={[styles.summaryValue, { color: (parseInt(varavu) || 0) - data.reduce((acc, item) => acc + (item.selavanathu || 0), 0) >= 0 ? Colors[theme].success : Colors[theme].danger }]}>{((parseInt(varavu) || 0) - data.reduce((acc, item) => acc + (item.selavanathu || 0), 0)).toLocaleString('en-IN')}</ThemedText>
                         </View>
                     </View>
-                    <DraggableFlatList data={data} onDragEnd={({ data }) => setData(data)} keyExtractor={(item) => item.key} renderItem={renderItem} containerStyle={styles.listContainer} />
+                    <DraggableFlatList data={data} onDragEnd={({ data }) => {
+                        setData(data); // Immediate UI update
+                        // Optimization: Only update items whose order has actually changed
+                        const updates = data.reduce((acc, item, index) => {
+                            if (item.order !== index) {
+                                acc.push({ key: item.key, order: index });
+                            }
+                            return acc;
+                        }, [] as { key: string, order: number }[]);
+
+                        if (updates.length > 0) {
+                            updateOrder(updates).catch(e => Alert.alert('Error', e.message));
+                        }
+                    }} keyExtractor={(item) => item.key} renderItem={renderItem} containerStyle={styles.listContainer} />
 
                     <TouchableOpacity style={[styles.fab, { backgroundColor: Colors[theme].tint }]} onPress={() => setAddModalVisible(true)}>
                         <ThemedText style={styles.fabText}>+</ThemedText>
@@ -218,21 +217,18 @@ export function TodoList() {
                 </View>
             </TouchableWithoutFeedback>
 
-            <Modal
-                animationType="slide"
-                transparent={true}
-                visible={addModalVisible}
-                onRequestClose={() => setAddModalVisible(false)}
-            >
+            <Modal animationType="slide" transparent={true} visible={addModalVisible} onRequestClose={() => setAddModalVisible(false)}>
                 <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
                     <TouchableWithoutFeedback onPress={() => setAddModalVisible(false)}>
                         <View style={styles.centeredView}>
                             <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
                                 <View style={[styles.modalView, { backgroundColor: Colors[theme].cardBackground }]} onStartShouldSetResponder={() => true}>
+                                    <View style={styles.dragHandleContainer}>
+                                        <View style={[styles.dragHandle, { backgroundColor: Colors[theme].icon }]} />
+                                    </View>
                                     <ThemedText style={styles.modalTitle}>புதிய பணி சேர்</ThemedText>
 
-                                    <TextInput
-                                        style={[styles.modalInput, { color: Colors[theme].text, borderColor: Colors[theme].borderColor, backgroundColor: Colors[theme].inputBackground }]}
+                                    <TextInput style={[styles.modalInput, { color: Colors[theme].text, borderColor: Colors[theme].borderColor, backgroundColor: Colors[theme].inputBackground }]}
                                         value={text}
                                         onChangeText={setText}
                                         placeholder="பணி பெயர்"
@@ -270,19 +266,19 @@ export function TodoList() {
                     </TouchableWithoutFeedback>
                 </KeyboardAvoidingView>
             </Modal>
+            <HistoryModal visible={historyModalVisible} onClose={() => setHistoryModalVisible(false)} item={selectedHistoryItem} />
+
         </KeyboardAvoidingView>
     );
 }
 
+import { GlobalStyles } from '@/constants/Styles';
 const styles = StyleSheet.create({
     container: {
         flex: 1,
         width: '100%',
     },
-    center: {
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
+    center: GlobalStyles.center,
     fab: {
         position: 'absolute',
         bottom: 24,
@@ -292,11 +288,7 @@ const styles = StyleSheet.create({
         borderRadius: 28,
         justifyContent: 'center',
         alignItems: 'center',
-        elevation: 6,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 3 },
-        shadowOpacity: 0.3,
-        shadowRadius: 4,
+        ...GlobalStyles.shadowMedium, // Use shadowMedium instead of manual shadow
     },
     fabText: {
         fontSize: 32,
@@ -304,59 +296,47 @@ const styles = StyleSheet.create({
         fontWeight: 'bold',
         marginTop: -4,
     },
-    centeredView: {
-        flex: 1,
-        justifyContent: "center",
-        alignItems: "center",
-        marginTop: 0,
-        backgroundColor: 'rgba(0,0,0,0.5)'
-    },
+    centeredView: GlobalStyles.modalOverlayBottom,
     modalView: {
-        margin: 20,
-        borderRadius: 20,
+        width: '100%',
+        borderTopLeftRadius: 24,
+        borderTopRightRadius: 24,
         padding: 24,
         alignItems: "center",
-        shadowColor: "#000",
-        shadowOffset: {
-            width: 0,
-            height: 2
-        },
-        shadowOpacity: 0.25,
-        shadowRadius: 4,
-        elevation: 5,
-        width: '85%',
+        ...GlobalStyles.shadowLarge,
+    },
+    dragHandleContainer: {
+        width: '100%',
+        alignItems: 'center',
+        paddingBottom: 20,
+    },
+    dragHandle: {
+        width: 40,
+        height: 4,
+        borderRadius: 2,
+        opacity: 0.3,
     },
     modalTitle: {
         fontSize: 20,
         fontWeight: 'bold',
-        marginBottom: 16,
+        marginBottom: 20,
     },
     modalInput: {
-        width: '100%',
-        borderWidth: 1,
-        borderRadius: 8,
-        padding: 12,
-        marginBottom: 12,
-        fontSize: 16,
+        ...GlobalStyles.input,
+        marginBottom: 16,
     },
     modalButtons: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         width: '100%',
-        marginTop: 12,
-        gap: 12,
+        marginTop: 10,
+        gap: 16,
     },
     modalButton: {
         flex: 1,
-        padding: 12,
-        borderRadius: 8,
-        alignItems: 'center',
+        ...GlobalStyles.button,
     },
-    buttonText: {
-        color: '#fff',
-        fontWeight: '600',
-        fontSize: 16,
-    },
+    buttonText: GlobalStyles.buttonText,
     listContainer: {
         flex: 1,
         width: '100%',
@@ -364,52 +344,46 @@ const styles = StyleSheet.create({
     summaryContainer: {
         flexDirection: 'row',
         flexWrap: 'wrap',
-        paddingHorizontal: 16,
-        paddingVertical: 12,
-        gap: 12,
+        paddingHorizontal: 0,
+        paddingVertical: 8,
+        gap: 8,
     },
     summaryCard: {
-        padding: 12,
-        borderRadius: 12,
+        padding: 16,
+        borderRadius: 16,
         alignItems: 'center',
         justifyContent: 'center',
-        elevation: 2,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.1,
-        shadowRadius: 2,
+        ...GlobalStyles.shadowMedium,
     },
     fullWidthCard: {
         width: '100%',
         marginBottom: 4,
     },
     halfWidthCard: {
-        width: '48%', // Approx half with gap
+        width: '48%',
         flexGrow: 1,
     },
     summaryLabel: {
         fontSize: 12,
-        opacity: 0.7,
-        marginBottom: 4,
+        opacity: 0.6,
+        marginBottom: 6,
         textAlign: 'center',
+        fontWeight: '600',
+        letterSpacing: 0.5,
     },
     summaryValue: {
-        fontSize: 16,
+        fontSize: 20,
         fontWeight: '700',
         textAlign: 'center',
     },
-    amountInputContainer: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
+    amountInputContainer: GlobalStyles.row,
     currencySymbol: {
         fontSize: 16,
         fontWeight: '700',
         marginRight: 2,
     },
     summaryInput: {
-        fontSize: 16,
+        fontSize: 24,
         fontWeight: '700',
         minWidth: 40,
         textAlign: 'center',
