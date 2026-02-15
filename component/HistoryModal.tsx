@@ -54,7 +54,7 @@ export function HistoryModal({ visible, onClose, item }: HistoryModalProps) {
             month: 'short',
             hour: '2-digit',
             minute: '2-digit',
-            hour12: true
+            hour12: false,
         });
     };
 
@@ -105,6 +105,7 @@ export function HistoryModal({ visible, onClose, item }: HistoryModalProps) {
                                         )}
                                         style={styles.list}
                                         showsVerticalScrollIndicator={false}
+                                        showsHorizontalScrollIndicator={false}
                                     />
                                 )}
 

@@ -196,20 +196,24 @@ export function TodoList() {
                             <ThemedText style={[styles.summaryValue, { color: (parseInt(varavu) || 0) - data.reduce((acc, item) => acc + (item.selavanathu || 0), 0) >= 0 ? Colors[theme].success : Colors[theme].danger }]}>{((parseInt(varavu) || 0) - data.reduce((acc, item) => acc + (item.selavanathu || 0), 0)).toLocaleString('en-IN')}</ThemedText>
                         </View>
                     </View>
-                    <DraggableFlatList data={data} onDragEnd={({ data }) => {
-                        setData(data); // Immediate UI update
-                        // Optimization: Only update items whose order has actually changed
-                        const updates = data.reduce((acc, item, index) => {
-                            if (item.order !== index) {
-                                acc.push({ key: item.key, order: index });
-                            }
-                            return acc;
-                        }, [] as { key: string, order: number }[]);
+                    <DraggableFlatList
+                        data={data}
+                        showsVerticalScrollIndicator={false}
+                        showsHorizontalScrollIndicator={false}
+                        onDragEnd={({ data }) => {
+                            setData(data); // Immediate UI update
+                            // Optimization: Only update items whose order has actually changed
+                            const updates = data.reduce((acc, item, index) => {
+                                if (item.order !== index) {
+                                    acc.push({ key: item.key, order: index });
+                                }
+                                return acc;
+                            }, [] as { key: string, order: number }[]);
 
-                        if (updates.length > 0) {
-                            updateOrder(updates).catch(e => Alert.alert('Error', e.message));
-                        }
-                    }} keyExtractor={(item) => item.key} renderItem={renderItem} containerStyle={styles.listContainer} />
+                            if (updates.length > 0) {
+                                updateOrder(updates).catch(e => Alert.alert('Error', e.message));
+                            }
+                        }} keyExtractor={(item) => item.key} renderItem={renderItem} containerStyle={styles.listContainer} />
 
                     <TouchableOpacity style={[styles.fab, { backgroundColor: Colors[theme].tint }]} onPress={() => setAddModalVisible(true)}>
                         <ThemedText style={styles.fabText}>+</ThemedText>

@@ -27,7 +27,7 @@ export const getVaralaru = async (uid: string) => {
 
 export const addKanaku = async (ethuku: string, selavu: number, selavanathu: number) => {
 	const realm = await getRealm();
-	const maxOrder = realm.objects('Kanaku').max('order') as number || 0;
+	const minOrder = realm.objects('Kanaku').min('order') as number || 0;
 	realm.write(() => {
 		realm.create('Kanaku', {
 			uid: uuid(),
@@ -35,7 +35,7 @@ export const addKanaku = async (ethuku: string, selavu: number, selavanathu: num
 			selavu,
 			selavanathu,
 			completed: false,
-			order: maxOrder + 1,
+			order: minOrder - 1,
 		});
 	});
 }
@@ -70,11 +70,22 @@ export async function updateKanaku(uid: string, data: string | number, key: "eth
 
 export const toggleKanaku = async (uid: string) => {
 	const realm = await getRealm();
+	const items = realm.objects('Kanaku');
 	realm.write(() => {
 		const kanaku = realm.objectForPrimaryKey('Kanaku', uid);
 		if (kanaku) {
 			// @ts-ignore
 			kanaku.completed = !kanaku.completed;
+
+			if (kanaku.completed) {
+				const maxOrder = items.max('order') as number || 0;
+				// @ts-ignore
+				kanaku.order = maxOrder + 1;
+			} else {
+				const minOrder = items.min('order') as number || 0;
+				// @ts-ignore
+				kanaku.order = minOrder - 1;
+			}
 		}
 	});
 };
